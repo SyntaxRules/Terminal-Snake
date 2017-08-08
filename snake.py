@@ -8,6 +8,10 @@ from curses import wrapper
 def get_terminal_dimentions(std_screen):
     return std_screen.getmaxyx()
 
+def print_end_game(stdscr, points):
+    print('The game has ended with {} points.'.format(points))
+    stdscr.addstr(5, 5, 'The Game Has Ended', curses.color_pair(1))
+
 
 def print_boarder(stdscr):
     # Clear screen
@@ -56,22 +60,35 @@ class Snake(object):
         if self.snake_direction == self.DIRECTION_LEFT:
             self.snake_head_location.x -= 1
 
+    def grow(self):
+        if self.snake_tail_length < 10:
+            self.snake_tail_length += 1
+
+    def get_snake_length(self):
+        return self.snake_tail_length + 1
+
     def print(self):
-
         self.screen.addstr(self.snake_head_location.y, self.snake_head_location.x, ' ', curses.color_pair(3))
-
+        stored_points = len(self.snake_previous_locations)
         if self.snake_tail_length > 0:
-            for i in range(1, self.snake_tail_length):
+            for i in range(stored_points - self.snake_tail_length, stored_points):
                 location = self.snake_previous_locations[i]
                 self.screen.addstr(location.y, location.x, ' ', curses.color_pair(3))
 
-    def is_valid(self, max_x=None, max_y=None):
+    def is_valid(self, max_x=None, min_x=None, max_y=None, min_y=None):
         """
         Snakes can't be on top of themselves and must be within the supplied
         parameters.
         :return:
         """
-        pass
+        all_locations = [self.snake_head_location]
+        all_locations.extend(self.snake_previous_locations[-self.snake_tail_length:])
+        for loc1 in all_locations:
+            for loc2 in all_locations:
+                if loc1 is not loc2 and loc1 == loc2:
+                    return False
+
+        return True
 
 
 class Location(object):
@@ -82,6 +99,9 @@ class Location(object):
     def __init__(self, x, y):
         self.x = int(x)
         self.y = int(y)
+
+    def __eq__(self, other):
+        return self.x == other.x and self.y == other.y
 
 
 def init_colors():
@@ -96,6 +116,8 @@ def init_colors():
 
 
 def run_game(stdscr):
+    # Set the cursor to invisible
+    curses.curs_set(0)
     stdscr.nodelay(True)
 
     # Snake
@@ -120,6 +142,14 @@ def run_game(stdscr):
         print_boarder(stdscr)
         snake.print()
         stdscr.refresh()
+
+        # If there is a collision with an apple, then
+        snake.grow()
+
+        if not snake.is_valid():
+            break
+
+    print_end_game(stdscr, snake.get_snake_length())
 
 if __name__ == '__main__':
     wrapper(run_game)

@@ -8,9 +8,8 @@ from curses import wrapper
 def get_terminal_dimentions(std_screen):
     return std_screen.getmaxyx()
 
-def print_end_game(stdscr, points):
+def print_end_game(points):
     print('The game has ended with {} points.'.format(points))
-    stdscr.addstr(5, 5, 'The Game Has Ended', curses.color_pair(1))
 
 
 def print_boarder(stdscr):
@@ -35,13 +34,10 @@ class Snake(object):
     DIRECTION_LEFT = curses.KEY_LEFT
     DIRECTION_RIGHT = curses.KEY_RIGHT
 
-    def __init__(self, stdscr):
-        self.screen = stdscr
-        self.screen_height, self.screen_width = get_terminal_dimentions(stdscr)
-        self.snake_head_location = Location(self.screen_width * (2/3), self.screen_height / 2)
+    def __init__(self, screen_height, screen_width):
         self.snake_direction = self.DIRECTION_UP
-        self.snake_tail_length = 0  # To make things easier, 0 means just the head
-        self.snake_previous_locations = []
+        self.snake_length: int = 1
+        self.snake_locations: List[Location] = [Location(screen_width * (2 / 3), screen_height / 2)]
 
     def advance(self, new_snake_direction=None):
         if new_snake_direction and (new_snake_direction == self.DIRECTION_UP or
@@ -49,42 +45,42 @@ class Snake(object):
                                     new_snake_direction == self.DIRECTION_LEFT or
                                     new_snake_direction == self.DIRECTION_RIGHT):
             self.snake_direction = new_snake_direction
-        self.snake_previous_locations.append(copy(self.snake_head_location))
 
+        new_snake_head: Location = copy(self.snake_locations[0])
         if self.snake_direction == self.DIRECTION_DOWN:
-            self.snake_head_location.y += 1
+            new_snake_head.y += 1
         if self.snake_direction == self.DIRECTION_UP:
-            self.snake_head_location.y -= 1
+            new_snake_head.y -= 1
         if self.snake_direction == self.DIRECTION_RIGHT:
-            self.snake_head_location.x += 1
+            new_snake_head.x += 1
         if self.snake_direction == self.DIRECTION_LEFT:
-            self.snake_head_location.x -= 1
+            new_snake_head.x -= 1
+
+        self.snake_locations.insert(0, new_snake_head)
+        if len(self.snake_locations) > self.snake_length:
+            del self.snake_locations[self.snake_length:]
 
     def grow(self):
-        if self.snake_tail_length < 10:
-            self.snake_tail_length += 1
+        if self.snake_length < 10:
+            self.snake_length += 1
 
     def get_snake_length(self):
-        return self.snake_tail_length + 1
+        return self.snake_length + 1
 
-    def print(self):
-        self.screen.addstr(self.snake_head_location.y, self.snake_head_location.x, ' ', curses.color_pair(3))
-        stored_points = len(self.snake_previous_locations)
-        if self.snake_tail_length > 0:
-            for i in range(stored_points - self.snake_tail_length, stored_points):
-                location = self.snake_previous_locations[i]
-                self.screen.addstr(location.y, location.x, ' ', curses.color_pair(3))
+    def print(self, screen):
+        for location in self.snake_locations:
+            screen.addstr(location.y, location.x, ' ', curses.color_pair(3))
 
-    def is_valid(self, max_x=None, min_x=None, max_y=None, min_y=None):
+    def is_valid(self, max_x: int, min_x: int, max_y: int, min_y: int):
         """
         Snakes can't be on top of themselves and must be within the supplied
         parameters.
         :return:
         """
-        all_locations = [self.snake_head_location]
-        all_locations.extend(self.snake_previous_locations[-self.snake_tail_length:])
-        for loc1 in all_locations:
-            for loc2 in all_locations:
+        for loc1 in self.snake_locations:
+            if loc1.x < min_x or loc1.x > max_x or loc1.y < min_y or loc1.y > max_y:
+                return False
+            for loc2 in self.snake_locations:
                 if loc1 is not loc2 and loc1 == loc2:
                     return False
 
@@ -121,14 +117,14 @@ def run_game(stdscr):
     stdscr.nodelay(True)
 
     # Snake
-    snake = Snake(stdscr)
-
-    print_boarder(stdscr)
-    snake.print()
-    stdscr.refresh()
+    height, width = get_terminal_dimentions(stdscr)
+    snake = Snake(height, width)
 
     while True:
-        sleep(1.0/2)
+        height, width = get_terminal_dimentions(stdscr)
+        print_boarder(stdscr)
+        snake.print(stdscr)
+        stdscr.refresh()
 
         # User input
         last_input = user_input = stdscr.getch()
@@ -137,20 +133,17 @@ def run_game(stdscr):
             last_input = stdscr.getch()
 
         snake.advance(user_input)
-
-
-        print_boarder(stdscr)
-        snake.print()
-        stdscr.refresh()
-
-        # If there is a collision with an apple, then
         snake.grow()
 
-        if not snake.is_valid():
+        if not snake.is_valid(width-1, 0, height-1, 0):
             break
 
-    print_end_game(stdscr, snake.get_snake_length())
+        sleep(1.0/2)
+
+    return snake.get_snake_length()
 
 if __name__ == '__main__':
-    wrapper(run_game)
+    score = wrapper(run_game)
+    print_end_game(score)
+
 
